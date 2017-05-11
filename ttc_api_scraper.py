@@ -1,6 +1,6 @@
 import logging, logging.config
 import sys
-import requests #to handle http requests to the API 
+import requests #to handle http requests to the API
 import aiohttp  # this lib replaces requests for asynchronous i/o
 import asyncio
 import async_timeout
@@ -28,7 +28,7 @@ class TTCSubwayScraper( object ):
              4: range(64, 69)}
     BASE_URL = "http://www.ttc.ca/Subway/loadNtas.action"
     #BASE_URL = 'http://www.ttc.ca/Subway/'
-   
+
     NTAS_SQL = """INSERT INTO public.ntas_data(\
             requestid, id, station_char, subwayline, system_message_type, \
             timint, traindirection, trainid, train_message) \
@@ -38,19 +38,19 @@ class TTCSubwayScraper( object ):
     def __init__(self, logger, con):
         self.logger = logger
         self.con = con
-        
+
     def get_API_response(self, line_id, station_id):
         payload = {"subwayLine":line_id,
                    "stationId":station_id,
                    "searchCriteria":''}
-        
+
         # with timeout set to 10, need to use a try block here to catch timeout errors
         try:
             r = requests.get(self.BASE_URL, params = payload, timeout = 10)
         except requests.exceptions.RequestException as err:
             self.logger.critical(err)
             return None
-        
+
         # another try block will check for http error codes
         try:
             r.raise_for_status()
@@ -73,7 +73,7 @@ class TTCSubwayScraper( object ):
         cursor.execute("INSERT INTO public.requests(data_, stationid, lineid, all_stations, create_date, pollid, request_date)"
                        "VALUES(%(data_)s, %(stationid)s, %(lineid)s, %(all_stations)s, %(create_date)s, %(pollid)s, %(request_date)s)"
                        "RETURNING requestid", request_row)
-        request_id = cursor.fetchone()[0] 
+        request_id = cursor.fetchone()[0]
         self.con.commit()
         cursor.close()
         self.logger.debug("Request " + str(request_id) + ": " + str(request_row) )
@@ -129,10 +129,10 @@ class TTCSubwayScraper( object ):
 
         # at interchange stations, the API returns trains on both lines, despite the fact that each line has a unique stationid
         # So for interchange stations, make sure we have at least one observation on the right line!
-        interchanges = (9,10,22,30,47,48,50,64) 
+        interchanges = (9,10,22,30,47,48,50,64)
         # if we're not in an interchange station, we're done
         if stationid not in interchanges:
-            return False 
+            return False
         # most general way to detect the problem is to check subwayLine field
         linecodes = ("YUS", "BD", "", "SHEP")
         # look for one train observed in the right direction
@@ -142,7 +142,7 @@ class TTCSubwayScraper( object ):
 
         # none match
         return True
-    
+
 
     async def query_station_async(self, session, line_id, station_id ):
         retries = 4
@@ -217,10 +217,10 @@ class TTCSubwayScraper( object ):
                         errmsg = 'No data for line {line}, station {station}'
                         self.logger.error(errmsg.format(line=line_id, station=station_id))
                         self.logger.debug( errmsg.format(line=line_id, station=station_id) )
-                        continue    
+                        continue
                     request_id = self.insert_request_info(poll_id, data, line_id, station_id, rtime )
                     self.insert_ntas_data(data['ntasData'], request_id)
-        
+
             self.update_poll_end( poll_id, datetime.now() )
 
 
@@ -241,27 +241,27 @@ class TTCSubwayScraper( object ):
                         # for http and timeout errors, sleep 2s before retrying
                         self.logger.debug("Sleeping 2s  ...")
                         sleep(2)
-       
+
 
                 if self.check_for_missing_data( station_id, line_id, data) :
                     errmsg = 'No data for line {line}, station {station}'
                     self.logger.error(errmsg.format(line=line_id, station=station_id))
                     self.logger.debug( errmsg.format(line=line_id, station=station_id) )
-                    continue    
+                    continue
                 request_id = self.insert_request_info(poll_id, data, line_id, station_id, datetime.now() )
                 self.insert_ntas_data(data['ntasData'], request_id)
 
         self.update_poll_end( poll_id, datetime.now() )
 
 if __name__ == '__main__':
-    
+
     import configparser
     CONFIG = configparser.ConfigParser(interpolation=None)
     CONFIG.read('db.cfg')
     dbset = CONFIG['DBSETTINGS']
-    
+
     LOGGING = CONFIG['LOGGING']
-    
+
 #    LOGGING = {
 #        'version':1,
 #        'formatters' : {
@@ -278,11 +278,11 @@ if __name__ == '__main__':
 #            'level': logging.DEBUG
 #        }
 #    }
-    
+
     logging.basicConfig(level=logging.getLevelName(LOGGING['level']), format=LOGGING['format'], filename=LOGGING['filename'])
-    
+
     LOGGER = logging.getLogger(__name__)
-    
+
     # add console output for debugging
     if LOGGING['level'] == 'DEBUG':
         ch = logging.StreamHandler()
@@ -290,11 +290,11 @@ if __name__ == '__main__':
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
         LOGGER.addHandler(ch)
-    
-    
+
+
 
     try:
-        con = connect(**dbset)  
+        con = connect(**dbset)
         scraper = TTCSubwayScraper(LOGGER, con)
 
         # old synchronous i/o version
